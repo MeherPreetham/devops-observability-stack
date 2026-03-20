@@ -1,0 +1,96 @@
+networks:
+  taskflow-network:
+    driver: bridge
+volumes:
+  mongodb-data:
+  prometheus-data:
+  grafana-data:
+services:
+#--------------------MONGODB SERVICE--------------------
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - taskflow-network
+    ports:
+      - "27017:27017"
+# --------------------USER SERVICE--------------------
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      MONGO_URL: mongodb://admin:password123@mongodb:27017/taskflow?authSource=admin
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+    ports:
+      - "3001:3001"
+    networks:
+      - taskflow-network
+    depends_on:
+      - mongodb
+
+# --------------------TASK SERVICE--------------------
+  task-service:
+    build:
+      context: ./services/task-service
+      dockerfile: Dockerfile
+    container_name: task-service
+    restart: unless-stopped
+    environment:
+      PORT: 3002
+      MONGO_URL: mongodb://admin:password123@mongodb:27017/taskflow?authSource=admin
+    ports:
+      - "3002:3002"
+    networks:
+      - taskflow-network
+    depends_on:
+      - mongodb
+      - user-service
+
+# --------------------ROMETHEUS--------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - taskflow-network
+    depends_on:
+      - user-service
+      - task-service
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+
+# --------------------GRAFANA--------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      # Auto-configure Prometheus as data source
+      GF_DATASOURCES_DEFAULT_URL: http://prometheus:9090
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-provisioning:/etc/grafana/provisioning
+    ports:
+      - "3000:3000"
+    networks:
+      - taskflow-network
+    depends_on:
+      - prometheus

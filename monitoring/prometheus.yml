@@ -1,0 +1,29 @@
+global:
+  scrape_interval: 15s      # Visit every service every 15 seconds
+  evaluation_interval: 15s  # Check alert rules every 15 seconds
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+# scrape_configs = the list of services Prometheus visits
+scrape_configs:
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Visit user-service /metrics every 15 seconds
+  - job_name: 'user-service'
+    static_configs:
+      - targets: ['user-service:3001']
+    metrics_path: '/metrics'
+
+  # Visit task-service /metrics every 15 seconds
+  - job_name: 'task-service'
+    static_configs:
+      - targets: ['task-service:3002']
+    metrics_path: '/metrics'
